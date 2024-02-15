@@ -1,0 +1,35 @@
+name: install dotslash
+author: Jon Janzen
+description: Prebuilt binaries of https://dotslash-cli.com
+branding:
+  icon: activity
+  color: purple
+
+runs:
+  using: composite
+  steps:
+    - id: configure
+      run: |
+        echo platform=${{runner.os == 'macOS' && 'macos' || runner.os == 'Windows' && 'windows' || 'ubuntu'}} >> $GITHUB_OUTPUT
+        echo version=$(curl https://api.github.com/repos/facebook/dotslash/releases/latest --location --silent --show-error --fail --retry 5 | sed -n 's/^ *"tag_name": *"\(.*\)",$/\1/p') >> $GITHUB_OUTPUT
+      shell: bash
+
+    - run: mkdir -p "${{runner.temp}}/install-dotslash/bin"
+      shell: bash
+
+    - run: curl https://github.com/facebook/dotslash/releases/download/${{steps.configure.outputs.version}}/dotslash-${{steps.configure.outputs.platform}}.${{steps.configure.outputs.version}}.tar.gz --output "${{runner.temp}}/install-dotslash/dotslash.tar.gz" --location --silent --show-error --fail --retry 5
+      shell: bash
+
+    - run: tar xvf "${{runner.temp}}/install-dotslash/dotslash.tar.gz" -C "${{runner.temp}}/install-dotslash/bin/"
+      if: ${{runner.os != 'Windows'}}
+      shell: bash
+
+    - run: tar xvf "${{runner.temp}}/install-dotslash/dotslash.tar.gz" -O >"${{runner.temp}}/install-dotslash/bin/dotslash.exe" --force-local
+      if: ${{runner.os == 'Windows'}}
+      shell: bash
+
+    - run: echo "${{runner.temp}}/install-dotslash/bin" >> $GITHUB_PATH
+      shell: bash
+
+    - run: dotslash --version
+      shell: bash

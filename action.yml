@@ -10,7 +10,7 @@ runs:
   steps:
     - id: configure
       run: |
-        echo platform=${{runner.os == 'macOS' && 'macos' || runner.os == 'Windows' && 'windows' || 'ubuntu'}} >> $GITHUB_OUTPUT
+        echo platform=${{runner.os == 'macOS' && 'macos' || runner.os == 'Windows' && 'windows' || 'ubuntu-22.04.x86_64'}} >> $GITHUB_OUTPUT
         echo version=$(curl https://api.github.com/repos/facebook/dotslash/releases/latest --location --silent --show-error --fail --retry 5 | sed -n 's/^ *"tag_name": *"\(.*\)",$/\1/p') >> $GITHUB_OUTPUT
       shell: bash
 

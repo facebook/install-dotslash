@@ -17,7 +17,11 @@ runs:
     - run: mkdir -p "${{runner.temp}}/install-dotslash/bin"
       shell: bash
 
-    - run: curl https://github.com/facebook/dotslash/releases/download/${{steps.configure.outputs.version}}/dotslash-${{steps.configure.outputs.platform}}.${{steps.configure.outputs.version}}.tar.gz --header "authorization: Bearer ${{ github.token }}" --output "${{runner.temp}}/install-dotslash/dotslash.tar.gz" --location --silent --show-error --fail --retry 5
+    - run: |
+        curl https://github.com/facebook/dotslash/releases/download/${{steps.configure.outputs.version}}/dotslash-${{steps.configure.outputs.platform}}.${{steps.configure.outputs.version}}.tar.gz \
+        --header "authorization: Bearer ${{ github.token }}" \
+        --output "${{runner.temp}}/install-dotslash/dotslash.tar.gz" \
+        --location --silent --show-error --fail --retry 5
       shell: bash
 
     - run: tar xvf "${{runner.temp}}/install-dotslash/dotslash.tar.gz" -C "${{runner.temp}}/install-dotslash/bin/"

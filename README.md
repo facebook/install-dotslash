@@ -17,3 +17,7 @@ jobs:
       - uses: facebook/install-dotslash@latest
       - run: ./some_dotslash_file
 ```
+
+## License
+
+`install-dotslash` is MIT licensed, as found in the LICENSE file.

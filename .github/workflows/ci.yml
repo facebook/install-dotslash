@@ -10,12 +10,20 @@ permissions:
 
 jobs:
   install:
-    name: ${{matrix.os == 'ubuntu' && 'Linux' || matrix.os == 'macos' && 'macOS' || matrix.os == 'windows' && 'Windows' || '???'}}
-    runs-on: ${{matrix.os}}-latest
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu, macos, windows]
+        include:
+          - os: ubuntu-latest
+            name: Linux x64
+          - os: ubuntu-24.04-arm64
+            name: Linux ARM64
+          - os: macos-14
+            name: macOS ARM64
+          - os: windows-latest
+            name: Windows x64
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4

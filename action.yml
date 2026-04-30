@@ -10,8 +10,19 @@ runs:
   steps:
     - id: configure
       run: |
-        echo platform=${{runner.os == 'macOS' && 'macos' || runner.os == 'Windows' && 'windows' || runner.arch == 'ARM64' && 'ubuntu-22.04.arm64' || 'ubuntu-22.04.x86_64'}} >> $GITHUB_OUTPUT
-        echo version=$(curl https://api.github.com/repos/facebook/dotslash/releases/latest --header "authorization: Bearer ${{ github.token }}" --location --silent --show-error --fail --retry 5 | sed -n 's/^ *"tag_name": *"\(.*\)",$/\1/p') >> $GITHUB_OUTPUT
+        mkdir -p "${{runner.temp}}/install-dotslash"
+        platform=${{runner.os == 'macOS' && 'macos' || runner.os == 'Windows' && 'windows' || runner.arch == 'ARM64' && 'ubuntu-22.04.arm64' || 'ubuntu-22.04.x86_64'}}
+        release_json="${{runner.temp}}/install-dotslash/release.json"
+        curl https://api.github.com/repos/facebook/dotslash/releases/latest \
+        --header "authorization: Bearer ${{ github.token }}" \
+        --output "$release_json" \
+        --location --silent --show-error --fail --retry 5
+        version=$(node -e 'const fs = require("fs"); const release = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); console.log(release.tag_name);' "$release_json")
+        asset_name="dotslash-$platform.$version.tar.gz"
+        digest=$(node -e 'const fs = require("fs"); const release = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); const asset = release.assets.find((asset) => asset.name === process.argv[2]); if (!asset) throw new Error(`Could not find release asset ${process.argv[2]}`); console.log(asset.digest ?? "");' "$release_json" "$asset_name")
+        echo platform=$platform >> $GITHUB_OUTPUT
+        echo version=$version >> $GITHUB_OUTPUT
+        echo digest=$digest >> $GITHUB_OUTPUT
       shell: bash
 
     - run: mkdir -p "${{runner.temp}}/install-dotslash/bin"
@@ -22,6 +33,28 @@ runs:
         --header "authorization: Bearer ${{ github.token }}" \
         --output "${{runner.temp}}/install-dotslash/dotslash.tar.gz" \
         --location --silent --show-error --fail --retry 5
+      shell: bash
+
+    - run: |
+        node - <<'NODE'
+        const crypto = require("crypto");
+        const fs = require("fs");
+
+        const expectedDigest = "${{steps.configure.outputs.digest}}";
+        if (!expectedDigest) {
+          throw new Error("Release asset digest is missing from the GitHub API response");
+        }
+        if (!expectedDigest.startsWith("sha256:")) {
+          throw new Error(`Unsupported release asset digest format: ${expectedDigest}`);
+        }
+
+        const archive = fs.readFileSync("${{runner.temp}}/install-dotslash/dotslash.tar.gz");
+        const actualDigest = "sha256:" + crypto.createHash("sha256").update(archive).digest("hex");
+
+        if (actualDigest !== expectedDigest) {
+          throw new Error(`Digest mismatch for dotslash archive: expected ${expectedDigest}, got ${actualDigest}`);
+        }
+        NODE
       shell: bash
 
     - run: tar xvf "${{runner.temp}}/install-dotslash/dotslash.tar.gz" -C "${{runner.temp}}/install-dotslash/bin/"

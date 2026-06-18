@@ -10,18 +10,60 @@ runs:
   steps:
     - id: configure
       run: |
-        echo platform=${{runner.os == 'macOS' && 'macos' || runner.os == 'Windows' && 'windows' || runner.arch == 'ARM64' && 'ubuntu-22.04.arm64' || 'ubuntu-22.04.x86_64'}} >> $GITHUB_OUTPUT
-        echo version=$(curl https://api.github.com/repos/facebook/dotslash/releases/latest --header "authorization: Bearer ${{ github.token }}" --location --silent --show-error --fail --retry 5 | sed -n 's/^ *"tag_name": *"\(.*\)",$/\1/p') >> $GITHUB_OUTPUT
+        platform=${{runner.os == 'macOS' && 'macos' || runner.os == 'Windows' && 'windows' || runner.arch == 'ARM64' && 'ubuntu-22.04.arm64' || 'ubuntu-22.04.x86_64'}}
+        release_json="${{runner.temp}}/install-dotslash-release.json"
+        curl https://api.github.com/repos/facebook/dotslash/releases/latest \
+        --header "authorization: Bearer ${{ github.token }}" \
+        --output "$release_json" \
+        --location --silent --show-error --fail --retry 5
+        release=$(tr -d '\n' < "$release_json")
+        version=$(printf '%s\n' "$release" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+        asset="dotslash-${platform}.${version}.tar.gz"
+        digest=$(printf '%s\n' "$release" | tr ',' '\n' | awk -v asset="$asset" '
+          /"name"[[:space:]]*:[[:space:]]*"/ {
+            value = $0
+            sub(/.*"name"[[:space:]]*:[[:space:]]*"/, "", value)
+            sub(/".*/, "", value)
+            found = value == asset
+          }
+          found && /"digest"[[:space:]]*:[[:space:]]*"/ {
+            value = $0
+            sub(/.*"digest"[[:space:]]*:[[:space:]]*"/, "", value)
+            sub(/".*/, "", value)
+            print value
+            exit
+          }
+        ')
+        if [ -z "$version" ] || [ -z "$digest" ]; then
+          echo "failed to resolve DotSlash release asset digest for $asset" >&2
+          exit 1
+        fi
+        echo platform="$platform" >> $GITHUB_OUTPUT
+        echo version="$version" >> $GITHUB_OUTPUT
+        echo asset="$asset" >> $GITHUB_OUTPUT
+        echo digest="$digest" >> $GITHUB_OUTPUT
       shell: bash
 
     - run: mkdir -p "${{runner.temp}}/install-dotslash/bin"
       shell: bash
 
     - run: |
-        curl https://github.com/facebook/dotslash/releases/download/${{steps.configure.outputs.version}}/dotslash-${{steps.configure.outputs.platform}}.${{steps.configure.outputs.version}}.tar.gz \
+        curl https://github.com/facebook/dotslash/releases/download/${{steps.configure.outputs.version}}/${{steps.configure.outputs.asset}} \
         --header "authorization: Bearer ${{ github.token }}" \
         --output "${{runner.temp}}/install-dotslash/dotslash.tar.gz" \
         --location --silent --show-error --fail --retry 5
+      shell: bash
+
+    - run: |
+        expected="${{steps.configure.outputs.digest}}"
+        expected_sha256="${expected#sha256:}"
+        archive="${{runner.temp}}/install-dotslash/dotslash.tar.gz"
+        if command -v sha256sum >/dev/null 2>&1; then
+          echo "$expected_sha256  $archive" | sha256sum --check
+        else
+          actual_sha256=$(shasum -a 256 "$archive" | cut -d ' ' -f 1)
+          test "$actual_sha256" = "$expected_sha256"
+        fi
       shell: bash
 
     - run: tar xvf "${{runner.temp}}/install-dotslash/dotslash.tar.gz" -C "${{runner.temp}}/install-dotslash/bin/"

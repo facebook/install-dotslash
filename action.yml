@@ -5,14 +5,26 @@ branding:
   icon: activity
   color: purple
 
+inputs:
+  version:
+    description: DotSlash release tag to install. Defaults to the latest release.
+    required: false
+    default: latest
+
 runs:
   using: composite
   steps:
     - id: configure
       run: |
         platform=${{runner.os == 'macOS' && 'macos' || runner.os == 'Windows' && 'windows' || runner.arch == 'ARM64' && 'ubuntu-22.04.arm64' || 'ubuntu-22.04.x86_64'}}
+        requested_version="${DOTSLASH_VERSION:-latest}"
+        if [ "$requested_version" = "latest" ]; then
+          release_url="https://api.github.com/repos/facebook/dotslash/releases/latest"
+        else
+          release_url="https://api.github.com/repos/facebook/dotslash/releases/tags/${requested_version}"
+        fi
         release_json="${{runner.temp}}/install-dotslash-release.json"
-        curl https://api.github.com/repos/facebook/dotslash/releases/latest \
+        curl "$release_url" \
         --header "authorization: Bearer ${{ github.token }}" \
         --output "$release_json" \
         --location --silent --show-error --fail --retry 5
@@ -43,6 +55,8 @@ runs:
         echo asset="$asset" >> $GITHUB_OUTPUT
         echo digest="$digest" >> $GITHUB_OUTPUT
       shell: bash
+      env:
+        DOTSLASH_VERSION: ${{ inputs.version }}
 
     - run: mkdir -p "${{runner.temp}}/install-dotslash/bin"
       shell: bash

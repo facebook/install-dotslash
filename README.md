@@ -18,6 +18,15 @@ jobs:
       - run: ./some_dotslash_file
 ```
 
+By default, the action installs the latest DotSlash release. To pin a release,
+pass the release tag:
+
+```yaml
+      - uses: facebook/install-dotslash@latest
+        with:
+          version: v0.5.9
+```
+
 ## License
 
 `install-dotslash` is MIT licensed, as found in the LICENSE file.

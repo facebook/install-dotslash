@@ -19,7 +19,7 @@ runs:
         release=$(tr -d '\n' < "$release_json")
         version=$(printf '%s\n' "$release" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
         asset="dotslash-${platform}.${version}.tar.gz"
-        digest=$(printf '%s\n' "$release" | tr ',' '\n' | awk -v asset="$asset" '
+        asset_metadata=$(printf '%s\n' "$release" | tr ',' '\n' | awk -v asset="$asset" '
           /"name"[[:space:]]*:[[:space:]]*"/ {
             value = $0
             sub(/.*"name"[[:space:]]*:[[:space:]]*"/, "", value)
@@ -30,25 +30,38 @@ runs:
             value = $0
             sub(/.*"digest"[[:space:]]*:[[:space:]]*"/, "", value)
             sub(/".*/, "", value)
-            print value
+            digest = value
+          }
+          found && /"browser_download_url"[[:space:]]*:[[:space:]]*"/ {
+            value = $0
+            sub(/.*"browser_download_url"[[:space:]]*:[[:space:]]*"/, "", value)
+            sub(/".*/, "", value)
+            download_url = value
+          }
+          found && digest != "" && download_url != "" {
+            print digest
+            print download_url
             exit
           }
         ')
-        if [ -z "$version" ] || [ -z "$digest" ]; then
-          echo "failed to resolve DotSlash release asset digest for $asset" >&2
+        digest=$(printf '%s\n' "$asset_metadata" | sed -n '1p')
+        download_url=$(printf '%s\n' "$asset_metadata" | sed -n '2p')
+        if [ -z "$version" ] || [ -z "$digest" ] || [ -z "$download_url" ]; then
+          echo "failed to resolve DotSlash release asset metadata for $asset" >&2
           exit 1
         fi
         echo platform="$platform" >> $GITHUB_OUTPUT
         echo version="$version" >> $GITHUB_OUTPUT
         echo asset="$asset" >> $GITHUB_OUTPUT
         echo digest="$digest" >> $GITHUB_OUTPUT
+        echo download_url="$download_url" >> $GITHUB_OUTPUT
       shell: bash
 
     - run: mkdir -p "${{runner.temp}}/install-dotslash/bin"
       shell: bash
 
     - run: |
-        curl https://github.com/facebook/dotslash/releases/download/${{steps.configure.outputs.version}}/${{steps.configure.outputs.asset}} \
+        curl "${{steps.configure.outputs.download_url}}" \
         --header "authorization: Bearer ${{ github.token }}" \
         --output "${{runner.temp}}/install-dotslash/dotslash.tar.gz" \
         --location --silent --show-error --fail --retry 5
